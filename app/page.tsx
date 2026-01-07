@@ -22,7 +22,6 @@ interface RodConfiguration {
   widthDirection: number;
   wallDistance: number;
   spacing: number;
-  orientation: 'parallel' | 'perpendicular';
 }
 
 export default function FurnaceSimulator() {
@@ -53,7 +52,6 @@ export default function FurnaceSimulator() {
     widthDirection: 3,
     wallDistance: 100,
     spacing: 300,
-    orientation: 'parallel',
   });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -71,61 +69,32 @@ export default function FurnaceSimulator() {
     ctx.fillStyle = '#FF6347';
     ctx.lineWidth = 4;
 
-    if (rodConfig.orientation === 'parallel') {
-      const lengthSpacing = rodConfig.lengthDirection > 1 
-        ? (innerLength - 2 * wallDist) / (rodConfig.lengthDirection - 1)
-        : 0;
-      const widthSpacing = rodConfig.widthDirection > 1
-        ? (innerWidth - 2 * wallDist) / (rodConfig.widthDirection - 1)
-        : 0;
-      
-      for (let i = 0; i < rodConfig.lengthDirection; i++) {
-        for (let j = 0; j < rodConfig.widthDirection; j++) {
-          const x = centerX - innerLength / 2 + wallDist + i * lengthSpacing;
-          const y = centerY - innerWidth / 2 + wallDist + j * widthSpacing;
-          
-          if (!isFinite(x) || !isFinite(y)) continue;
-          
-          ctx.beginPath();
-          ctx.arc(x, y, 6, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          
-          const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, 20);
-          glowGradient.addColorStop(0, 'rgba(255, 69, 0, 0.8)');
-          glowGradient.addColorStop(1, 'rgba(255, 69, 0, 0)');
-          ctx.fillStyle = glowGradient;
-          ctx.beginPath();
-          ctx.arc(x, y, 20, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    } else {
-      const spacing = rodConfig.lengthDirection > 1
-        ? (innerLength - 2 * wallDist) / (rodConfig.lengthDirection - 1)
-        : 0;
-      
-      for (let i = 0; i < rodConfig.lengthDirection; i++) {
-        const x = centerX - innerLength / 2 + wallDist + i * spacing;
-        const y1 = centerY - innerWidth / 2 + wallDist;
-        const y2 = centerY + innerWidth / 2 - wallDist;
+    const lengthSpacing = rodConfig.lengthDirection > 1 
+      ? (innerLength - 2 * wallDist) / (rodConfig.lengthDirection - 1)
+      : 0;
+    const widthSpacing = rodConfig.widthDirection > 1
+      ? (innerWidth - 2 * wallDist) / (rodConfig.widthDirection - 1)
+      : 0;
+    
+    for (let i = 0; i < rodConfig.lengthDirection; i++) {
+      for (let j = 0; j < rodConfig.widthDirection; j++) {
+        const x = centerX - innerLength / 2 + wallDist + i * lengthSpacing;
+        const y = centerY - innerWidth / 2 + wallDist + j * widthSpacing;
         
-        if (!isFinite(x) || !isFinite(y1) || !isFinite(y2)) continue;
+        if (!isFinite(x) || !isFinite(y)) continue;
         
         ctx.beginPath();
-        ctx.moveTo(x, y1);
-        ctx.lineTo(x, y2);
+        ctx.arc(x, y, 6, 0, Math.PI * 2);
+        ctx.fill();
         ctx.stroke();
         
-        for (let y = y1; y <= y2; y += 20) {
-          const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, 15);
-          glowGradient.addColorStop(0, 'rgba(255, 69, 0, 0.6)');
-          glowGradient.addColorStop(1, 'rgba(255, 69, 0, 0)');
-          ctx.fillStyle = glowGradient;
-          ctx.beginPath();
-          ctx.arc(x, y, 15, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, 20);
+        glowGradient.addColorStop(0, 'rgba(255, 69, 0, 0.8)');
+        glowGradient.addColorStop(1, 'rgba(255, 69, 0, 0)');
+        ctx.fillStyle = glowGradient;
+        ctx.beginPath();
+        ctx.arc(x, y, 20, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
   }, [rodConfig, furnaceDimensions]);
@@ -556,17 +525,6 @@ export default function FurnaceSimulator() {
                     className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm mb-1">棒方向</label>
-                  <select
-                    value={rodConfig.orientation}
-                    onChange={(e) => setRodConfig({...rodConfig, orientation: e.target.value as 'parallel' | 'perpendicular'})}
-                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
-                  >
-                    <option value="parallel">平行于炉壁</option>
-                    <option value="perpendicular">垂直于炉壁</option>
-                  </select>
-                </div>
               </div>
             </div>
           </div>
@@ -581,7 +539,7 @@ export default function FurnaceSimulator() {
               <h4 className="font-semibold text-orange-400 mb-2">可视化说明</h4>
               <ul className="space-y-1 list-disc list-inside">
                 <li>不同颜色的矩形表示不同的保温层</li>
-                <li>红色点或线表示硅钼棒位置</li>
+                <li>红色圆点表示硅钼棒位置（垂直安装，俯视图显示横截面）</li>
                 <li>温度场通过颜色渐变显示，红色表示高温</li>
                 <li>中心区域温度最高，边缘区域温度较低</li>
               </ul>
