@@ -18,11 +18,12 @@ interface RodConfiguration {
   totalCount: number;
   hotEndLength: number;
   coldEndLength: number;
-  lengthDirection: number;
-  widthDirection: number;
+  topWallCount: number;
+  bottomWallCount: number;
+  leftWallCount: number;
+  rightWallCount: number;
   wallDistance: number;
   spacing: number;
-  orientation: 'parallel' | 'perpendicular';
 }
 
 export default function FurnaceSimulator() {
@@ -49,11 +50,12 @@ export default function FurnaceSimulator() {
     totalCount: 12,
     hotEndLength: 400,
     coldEndLength: 200,
-    lengthDirection: 4,
-    widthDirection: 3,
-    wallDistance: 100,
+    topWallCount: 3,
+    bottomWallCount: 3,
+    leftWallCount: 3,
+    rightWallCount: 3,
+    wallDistance: 50,
     spacing: 300,
-    orientation: 'parallel',
   });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -71,12 +73,12 @@ export default function FurnaceSimulator() {
     const coldEndScaled = rodConfig.coldEndLength * scale;
     const rodLength = hotEndScaled + coldEndScaled;
     
-    ctx.strokeStyle = '#FF4500';
     ctx.lineWidth = 3;
 
     const drawRod = (x1: number, y1: number, x2: number, y2: number) => {
       if (!isFinite(x1) || !isFinite(y1) || !isFinite(x2) || !isFinite(y2)) return;
       
+      ctx.strokeStyle = '#FF4500';
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
@@ -98,50 +100,59 @@ export default function FurnaceSimulator() {
       ctx.lineWidth = 2;
       ctx.stroke();
       
-      ctx.strokeStyle = '#FF4500';
       ctx.lineWidth = 3;
     };
 
     const topY = centerY - innerWidth / 2 + wallDist;
+    const bottomY = centerY + innerWidth / 2 - wallDist;
     const leftX = centerX - innerLength / 2 + wallDist;
+    const rightX = centerX + innerLength / 2 - wallDist;
 
-    if (rodConfig.orientation === 'parallel') {
-      const lengthSpacing = rodConfig.lengthDirection > 1 
-        ? (innerLength - 2 * wallDist) / (rodConfig.lengthDirection - 1)
+    if (rodConfig.topWallCount > 0) {
+      const spacing = rodConfig.topWallCount > 1 
+        ? (innerLength - 2 * wallDist) / (rodConfig.topWallCount - 1)
         : 0;
-      const widthSpacing = rodConfig.widthDirection > 1
-        ? (innerWidth - 2 * wallDist) / (rodConfig.widthDirection - 1)
-        : 0;
-      
-      for (let i = 0; i < rodConfig.lengthDirection; i++) {
-        for (let j = 0; j < rodConfig.widthDirection; j++) {
-          const x = leftX + i * lengthSpacing;
-          const y = topY + j * widthSpacing;
-          
-          const x1 = x - rodLength / 2;
-          const x2 = x + rodLength / 2;
-          
-          drawRod(x1, y, x2, y);
-        }
+      for (let i = 0; i < rodConfig.topWallCount; i++) {
+        const x = leftX + i * spacing;
+        const y1 = topY;
+        const y2 = topY + rodLength;
+        drawRod(x, y1, x, y2);
       }
-    } else {
-      const lengthSpacing = rodConfig.lengthDirection > 1 
-        ? (innerLength - 2 * wallDist) / (rodConfig.lengthDirection - 1)
+    }
+
+    if (rodConfig.bottomWallCount > 0) {
+      const spacing = rodConfig.bottomWallCount > 1 
+        ? (innerLength - 2 * wallDist) / (rodConfig.bottomWallCount - 1)
         : 0;
-      const widthSpacing = rodConfig.widthDirection > 1
-        ? (innerWidth - 2 * wallDist) / (rodConfig.widthDirection - 1)
+      for (let i = 0; i < rodConfig.bottomWallCount; i++) {
+        const x = leftX + i * spacing;
+        const y1 = bottomY;
+        const y2 = bottomY - rodLength;
+        drawRod(x, y1, x, y2);
+      }
+    }
+
+    if (rodConfig.leftWallCount > 0) {
+      const spacing = rodConfig.leftWallCount > 1 
+        ? (innerWidth - 2 * wallDist) / (rodConfig.leftWallCount - 1)
         : 0;
-      
-      for (let i = 0; i < rodConfig.lengthDirection; i++) {
-        for (let j = 0; j < rodConfig.widthDirection; j++) {
-          const x = leftX + i * lengthSpacing;
-          const y = topY + j * widthSpacing;
-          
-          const y1 = y - rodLength / 2;
-          const y2 = y + rodLength / 2;
-          
-          drawRod(x, y1, x, y2);
-        }
+      for (let i = 0; i < rodConfig.leftWallCount; i++) {
+        const y = topY + i * spacing;
+        const x1 = leftX;
+        const x2 = leftX + rodLength;
+        drawRod(x1, y, x2, y);
+      }
+    }
+
+    if (rodConfig.rightWallCount > 0) {
+      const spacing = rodConfig.rightWallCount > 1 
+        ? (innerWidth - 2 * wallDist) / (rodConfig.rightWallCount - 1)
+        : 0;
+      for (let i = 0; i < rodConfig.rightWallCount; i++) {
+        const y = topY + i * spacing;
+        const x1 = rightX;
+        const x2 = rightX - rodLength;
+        drawRod(x1, y, x2, y);
       }
     }
   }, [rodConfig, furnaceDimensions]);
@@ -537,22 +548,42 @@ export default function FurnaceSimulator() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm mb-1">长度方向数量</label>
+                  <label className="block text-sm mb-1">上壁数量</label>
                   <input
                     type="number"
-                    min="1"
-                    value={rodConfig.lengthDirection}
-                    onChange={(e) => setRodConfig({...rodConfig, lengthDirection: Number(e.target.value)})}
+                    min="0"
+                    value={rodConfig.topWallCount}
+                    onChange={(e) => setRodConfig({...rodConfig, topWallCount: Number(e.target.value)})}
                     className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm mb-1">宽度方向数量</label>
+                  <label className="block text-sm mb-1">下壁数量</label>
                   <input
                     type="number"
-                    min="1"
-                    value={rodConfig.widthDirection}
-                    onChange={(e) => setRodConfig({...rodConfig, widthDirection: Number(e.target.value)})}
+                    min="0"
+                    value={rodConfig.bottomWallCount}
+                    onChange={(e) => setRodConfig({...rodConfig, bottomWallCount: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">左壁数量</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={rodConfig.leftWallCount}
+                    onChange={(e) => setRodConfig({...rodConfig, leftWallCount: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">右壁数量</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={rodConfig.rightWallCount}
+                    onChange={(e) => setRodConfig({...rodConfig, rightWallCount: Number(e.target.value)})}
                     className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
                   />
                 </div>
@@ -564,26 +595,6 @@ export default function FurnaceSimulator() {
                     onChange={(e) => setRodConfig({...rodConfig, wallDistance: Number(e.target.value)})}
                     className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm mb-1">棒间距 (mm)</label>
-                  <input
-                    type="number"
-                    value={rodConfig.spacing}
-                    onChange={(e) => setRodConfig({...rodConfig, spacing: Number(e.target.value)})}
-                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm mb-1">棒方向</label>
-                  <select
-                    value={rodConfig.orientation}
-                    onChange={(e) => setRodConfig({...rodConfig, orientation: e.target.value as 'parallel' | 'perpendicular'})}
-                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
-                  >
-                    <option value="parallel">平行于炉壁</option>
-                    <option value="perpendicular">垂直于炉壁</option>
-                  </select>
                 </div>
               </div>
             </div>
@@ -599,9 +610,9 @@ export default function FurnaceSimulator() {
               <h4 className="font-semibold text-orange-400 mb-2">可视化说明</h4>
               <ul className="space-y-1 list-disc list-inside">
                 <li>不同颜色的矩形表示不同的保温层</li>
-                <li>所有硅钼棒从顶壁（炉膛上方）垂直穿入</li>
-                <li>俯视图显示：金色冷端 + 橙红色棒身 + 红色热端</li>
-                <li>棒在炉内可平行或垂直于炉壁布置</li>
+                <li>硅钼棒从顶壁垂直穿入，沿四周墙壁布置</li>
+                <li>俯视图：每根棒显示为2个圆点+连线</li>
+                <li>金色圆点（冷端）+ 橙红色连线 + 红色圆点（热端）</li>
                 <li>温度场通过颜色渐变显示，红色表示高温</li>
               </ul>
             </div>
