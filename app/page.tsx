@@ -72,13 +72,19 @@ export default function FurnaceSimulator() {
     ctx.lineWidth = 4;
 
     if (rodConfig.orientation === 'parallel') {
-      const lengthSpacing = (innerLength - 2 * wallDist) / (rodConfig.lengthDirection - 1);
-      const widthSpacing = (innerWidth - 2 * wallDist) / (rodConfig.widthDirection - 1);
+      const lengthSpacing = rodConfig.lengthDirection > 1 
+        ? (innerLength - 2 * wallDist) / (rodConfig.lengthDirection - 1)
+        : 0;
+      const widthSpacing = rodConfig.widthDirection > 1
+        ? (innerWidth - 2 * wallDist) / (rodConfig.widthDirection - 1)
+        : 0;
       
       for (let i = 0; i < rodConfig.lengthDirection; i++) {
         for (let j = 0; j < rodConfig.widthDirection; j++) {
           const x = centerX - innerLength / 2 + wallDist + i * lengthSpacing;
           const y = centerY - innerWidth / 2 + wallDist + j * widthSpacing;
+          
+          if (!isFinite(x) || !isFinite(y)) continue;
           
           ctx.beginPath();
           ctx.arc(x, y, 6, 0, Math.PI * 2);
@@ -95,12 +101,16 @@ export default function FurnaceSimulator() {
         }
       }
     } else {
-      const spacing = (innerLength - 2 * wallDist) / (rodConfig.lengthDirection - 1);
+      const spacing = rodConfig.lengthDirection > 1
+        ? (innerLength - 2 * wallDist) / (rodConfig.lengthDirection - 1)
+        : 0;
       
       for (let i = 0; i < rodConfig.lengthDirection; i++) {
         const x = centerX - innerLength / 2 + wallDist + i * spacing;
         const y1 = centerY - innerWidth / 2 + wallDist;
         const y2 = centerY + innerWidth / 2 - wallDist;
+        
+        if (!isFinite(x) || !isFinite(y1) || !isFinite(y2)) continue;
         
         ctx.beginPath();
         ctx.moveTo(x, y1);
@@ -127,6 +137,8 @@ export default function FurnaceSimulator() {
     innerLength: number,
     innerWidth: number
   ) => {
+    if (innerLength <= 0 || innerWidth <= 0) return;
+    
     const gridSize = 20;
     const cols = Math.floor(innerLength / gridSize);
     const rows = Math.floor(innerWidth / gridSize);
@@ -143,14 +155,16 @@ export default function FurnaceSimulator() {
         
         const tempVariation = (0.5 - distToCenter) * 50;
         const localTemp = currentTemp + tempVariation;
-        const tempRatio = localTemp / temperature;
+        const tempRatio = temperature > 0 ? localTemp / temperature : 0;
         
         const alpha = 0.1 + Math.random() * 0.05;
-        const red = Math.floor(255 * Math.min(tempRatio * 1.2, 1));
-        const green = Math.floor(100 * (1 - tempRatio * 0.8));
+        const red = Math.floor(255 * Math.min(Math.max(tempRatio * 1.2, 0), 1));
+        const green = Math.floor(100 * Math.max(1 - tempRatio * 0.8, 0));
         
-        ctx.fillStyle = `rgba(${red}, ${green}, 30, ${alpha})`;
-        ctx.fillRect(x - gridSize / 2, y - gridSize / 2, gridSize, gridSize);
+        if (isFinite(red) && isFinite(green)) {
+          ctx.fillStyle = `rgba(${red}, ${green}, 30, ${alpha})`;
+          ctx.fillRect(x - gridSize / 2, y - gridSize / 2, gridSize, gridSize);
+        }
       }
     }
   }, [currentTemp, temperature]);
@@ -164,10 +178,18 @@ export default function FurnaceSimulator() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
+    const totalInsulationThickness = insulationLayers.reduce((sum, layer) => sum + (layer.thickness || 0), 0);
+    const totalLength = (furnaceDimensions.length || 0) + totalInsulationThickness * 2;
+    const totalWidth = (furnaceDimensions.width || 0) + totalInsulationThickness * 2;
+    
+    if (totalLength <= 0 || totalWidth <= 0) return;
+    
     const scale = Math.min(
-      (canvas.width - 100) / (furnaceDimensions.length + insulationLayers.reduce((sum, layer) => sum + layer.thickness, 0) * 2),
-      (canvas.height - 100) / (furnaceDimensions.width + insulationLayers.reduce((sum, layer) => sum + layer.thickness, 0) * 2)
+      (canvas.width - 100) / totalLength,
+      (canvas.height - 100) / totalWidth
     );
+
+    if (!isFinite(scale) || scale <= 0) return;
 
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
@@ -258,7 +280,7 @@ export default function FurnaceSimulator() {
     const newLayers = [...insulationLayers];
     newLayers[index][field] = value;
     if (field === 'thickness' || field === 'thermalConductivity') {
-      if (field === 'thickness' && value !== 0) {
+      if (field === 'thickness' && newLayers[index].thermalConductivity !== 0) {
         newLayers[index].thermalResistance = value / newLayers[index].thermalConductivity;
       } else if (field === 'thermalConductivity' && value !== 0) {
         newLayers[index].thermalResistance = newLayers[index].thickness / value;
