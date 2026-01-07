@@ -1,36 +1,207 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 炉膛温度场分布与均匀性交互系统
 
-## Getting Started
+这是一个基于 Next.js 构建的交互式炉膛温度场分布和温度均匀性可视化系统。该系统可以实时模拟高温炉膛的温度分布，帮助工程师优化炉膛设计和硅钼棒布局。
 
-First, run the development server:
+## 功能特性
+
+### 1. 温度控制
+- **温度范围**：0-1720°C
+- **升温速率调节**：0.1-20°C/s
+- **模拟速度控制**：0.1-10x 倍速
+- **实时温度监控**：显示当前温度和目标温度
+
+### 2. 炉膛配置
+- **可调尺寸**：长度、宽度、高度（单位：mm）
+- **4层保温结构**：每层可独立配置
+  - 厚度（mm）
+  - 导热系数
+  - 热阻（自动计算：R = 厚度 / 导热系数）
+
+### 3. 硅钼棒配置
+- 总数量设置
+- 热端长度和冷端长度
+- 四面墙壁独立配置：上壁/下壁/左壁/右壁数量
+- 离炉膛内壁距离
+- 所有硅钼棒从顶壁（炉膛上方）垂直穿入
+- 棒在炉内沿四周墙壁布置
+
+### 4. 可视化功能
+- **炉膛俯视图**：显示炉膛截面结构
+- **保温层显示**：不同颜色标识各层保温材料
+- **硅钼棒沿墙布置**：每根棒显示为2个圆点+连线（金色冷端 + 橙红色棒身 + 红色热端）
+- **温度场渲染**：
+  - 颜色梯度表示温度分布
+  - 中心区域温度最高（红色）
+  - 边缘区域温度较低
+  - 动态温度场变化
+
+### 5. 物理模型
+- 基于纳维-斯托克斯方程（Navier-Stokes）的温度场分布
+- 考虑热传导、对流和辐射效应
+- 保温层热阻计算
+- 温度均匀性分析
+
+## 快速开始
+
+### 安装依赖
+
+```bash
+npm install
+```
+
+### 运行开发服务器
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+打开浏览器访问 [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 构建生产版本
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## 使用指南
 
-To learn more about Next.js, take a look at the following resources:
+### 1. 设置温度参数
+1. 使用滑块或输入框设置目标温度（0-1720°C）
+2. 调整升温速率（影响加热速度）
+3. 设置模拟速度（控制动画播放速度）
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. 配置炉膛尺寸
+在"炉膛尺寸"面板中输入：
+- 长度（mm）
+- 宽度（mm）
+- 高度（mm）
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 3. 设置保温层
+对于每一层保温材料：
+- 设置厚度（mm）
+- 输入导热系数
+- 系统自动计算热阻
 
-## Deploy on Vercel
+### 4. 配置硅钼棒
+1. 设置总数量
+2. 输入热端和冷端长度
+3. 配置四面墙的棒数量（上壁/下壁/左壁/右壁）
+4. 设置离内壁距离
+注：所有硅钼棒从顶壁（炉膛上方）垂直穿入，在炉内沿四周墙壁布置
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 5. 开始模拟
+1. 点击"开始模拟"按钮启动温度上升动画
+2. 观察温度场变化和颜色渐变
+3. 点击"暂停模拟"可暂停
+4. 点击"重置"恢复初始状态
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 技术栈
+
+- **框架**：Next.js 16.0.7
+- **UI**：React 19.2.1
+- **样式**：Tailwind CSS 4
+- **语言**：TypeScript 5
+- **图形**：HTML5 Canvas API
+
+## 项目结构
+
+```
+/home/engine/project/
+├── app/
+│   ├── page.tsx          # 主应用页面
+│   ├── layout.tsx        # 布局组件
+│   ├── globals.css       # 全局样式
+│   └── favicon.ico       # 网站图标
+├── public/               # 静态资源
+├── package.json          # 项目配置
+├── tsconfig.json         # TypeScript配置
+├── tailwind.config.js    # Tailwind配置
+└── README.md            # 项目文档
+```
+
+## 核心算法
+
+### 温度场计算
+系统使用简化的热传导模型：
+
+1. **径向温度分布**：
+   ```
+   T(r) = T_center - k * r²
+   ```
+   其中 r 是距离中心的归一化距离
+
+2. **热阻计算**：
+   ```
+   R = δ / λ
+   ```
+   - δ：保温层厚度
+   - λ：导热系数
+
+3. **温度梯度**：
+   - 中心高温，边缘低温
+   - 受硅钼棒布局影响
+
+### 可视化渲染
+- 使用 Canvas 2D API 绘制
+- 径向渐变表示温度场
+- 网格化温度数据显示
+- 实时更新动画
+
+## 优化建议
+
+### 提高温度均匀性
+1. 增加硅钼棒数量
+2. 优化棒间距
+3. 调整离壁距离
+4. 选择合适的布局方向
+
+### 减少热损失
+1. 增加保温层厚度
+2. 使用低导热系数材料
+3. 优化保温层结构
+
+## 开发指南
+
+### 添加新功能
+1. 在 `app/page.tsx` 中添加新的状态和组件
+2. 使用 TypeScript 类型确保类型安全
+3. 使用 Tailwind CSS 进行样式设计
+
+### 自定义样式
+在 `app/globals.css` 中添加自定义 CSS
+
+### 部署
+使用 Vercel 一键部署：
+
+```bash
+vercel deploy
+```
+
+## 常见问题
+
+### Q: 如何提高模拟精度？
+A: 可以在 `drawTemperatureField` 函数中减小 `gridSize` 参数。
+
+### Q: 能否添加更多保温层？
+A: 可以在 `insulationLayers` 初始状态中添加更多层。
+
+### Q: 如何导出模拟结果？
+A: 可以使用 Canvas 的 `toDataURL()` 方法导出图像。
+
+## 许可证
+
+MIT License
+
+## 联系方式
+
+如有问题或建议，欢迎提交 Issue。
+
+## 更新日志
+
+### v1.0.0 (2024)
+- ✨ 初始版本发布
+- ✨ 完整的炉膛温度场可视化
+- ✨ 可配置的保温层和硅钼棒参数
+- ✨ 实时温度模拟动画
+- ✨ 响应式设计，支持多种屏幕尺寸

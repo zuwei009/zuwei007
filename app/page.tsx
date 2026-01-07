@@ -1,49 +1,651 @@
-export default function Home() {
+'use client';
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+
+interface InsulationLayer {
+  thickness: number;
+  thermalConductivity: number;
+  thermalResistance: number;
+}
+
+interface FurnaceDimensions {
+  length: number;
+  width: number;
+  height: number;
+}
+
+interface RodConfiguration {
+  totalCount: number;
+  hotEndLength: number;
+  coldEndLength: number;
+  topWallCount: number;
+  bottomWallCount: number;
+  leftWallCount: number;
+  rightWallCount: number;
+  wallDistance: number;
+  spacing: number;
+}
+
+export default function FurnaceSimulator() {
+  const [temperature, setTemperature] = useState(1000);
+  const [heatingRate, setHeatingRate] = useState(5);
+  const [simulationSpeed, setSimulationSpeed] = useState(1);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [currentTemp, setCurrentTemp] = useState(25);
+  
+  const [insulationLayers, setInsulationLayers] = useState<InsulationLayer[]>([
+    { thickness: 200, thermalConductivity: 0.5, thermalResistance: 400 },
+    { thickness: 150, thermalConductivity: 0.4, thermalResistance: 375 },
+    { thickness: 100, thermalConductivity: 0.3, thermalResistance: 333 },
+    { thickness: 50, thermalConductivity: 0.2, thermalResistance: 250 },
+  ]);
+  
+  const [furnaceDimensions, setFurnaceDimensions] = useState<FurnaceDimensions>({
+    length: 2000,
+    width: 1500,
+    height: 1200,
+  });
+  
+  const [rodConfig, setRodConfig] = useState<RodConfiguration>({
+    totalCount: 12,
+    hotEndLength: 400,
+    coldEndLength: 200,
+    topWallCount: 3,
+    bottomWallCount: 3,
+    leftWallCount: 3,
+    rightWallCount: 3,
+    wallDistance: 50,
+    spacing: 300,
+  });
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const drawHeatingRods = useCallback((
+    ctx: CanvasRenderingContext2D,
+    centerX: number,
+    centerY: number,
+    innerLength: number,
+    innerWidth: number
+  ) => {
+    const scale = Math.min(innerLength / furnaceDimensions.length, innerWidth / furnaceDimensions.width);
+    const wallDist = rodConfig.wallDistance * scale;
+    const hotEndScaled = rodConfig.hotEndLength * scale;
+    const coldEndScaled = rodConfig.coldEndLength * scale;
+    const rodLength = hotEndScaled + coldEndScaled;
+    
+    ctx.lineWidth = 3;
+
+    const drawRod = (x1: number, y1: number, x2: number, y2: number) => {
+      if (!isFinite(x1) || !isFinite(y1) || !isFinite(x2) || !isFinite(y2)) return;
+      
+      ctx.strokeStyle = '#FF4500';
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath();
+      ctx.arc(x1, y1, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#FFA500';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      ctx.fillStyle = '#FF4500';
+      ctx.beginPath();
+      ctx.arc(x2, y2, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#FF0000';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      ctx.lineWidth = 3;
+    };
+
+    const topY = centerY - innerWidth / 2 + wallDist;
+    const bottomY = centerY + innerWidth / 2 - wallDist;
+    const leftX = centerX - innerLength / 2 + wallDist;
+    const rightX = centerX + innerLength / 2 - wallDist;
+
+    if (rodConfig.topWallCount > 0) {
+      const spacing = rodConfig.topWallCount > 1 
+        ? (innerLength - 2 * wallDist) / (rodConfig.topWallCount - 1)
+        : 0;
+      for (let i = 0; i < rodConfig.topWallCount; i++) {
+        const x = leftX + i * spacing;
+        const y1 = topY;
+        const y2 = topY + rodLength;
+        drawRod(x, y1, x, y2);
+      }
+    }
+
+    if (rodConfig.bottomWallCount > 0) {
+      const spacing = rodConfig.bottomWallCount > 1 
+        ? (innerLength - 2 * wallDist) / (rodConfig.bottomWallCount - 1)
+        : 0;
+      for (let i = 0; i < rodConfig.bottomWallCount; i++) {
+        const x = leftX + i * spacing;
+        const y1 = bottomY;
+        const y2 = bottomY - rodLength;
+        drawRod(x, y1, x, y2);
+      }
+    }
+
+    if (rodConfig.leftWallCount > 0) {
+      const spacing = rodConfig.leftWallCount > 1 
+        ? (innerWidth - 2 * wallDist) / (rodConfig.leftWallCount - 1)
+        : 0;
+      for (let i = 0; i < rodConfig.leftWallCount; i++) {
+        const y = topY + i * spacing;
+        const x1 = leftX;
+        const x2 = leftX + rodLength;
+        drawRod(x1, y, x2, y);
+      }
+    }
+
+    if (rodConfig.rightWallCount > 0) {
+      const spacing = rodConfig.rightWallCount > 1 
+        ? (innerWidth - 2 * wallDist) / (rodConfig.rightWallCount - 1)
+        : 0;
+      for (let i = 0; i < rodConfig.rightWallCount; i++) {
+        const y = topY + i * spacing;
+        const x1 = rightX;
+        const x2 = rightX - rodLength;
+        drawRod(x1, y, x2, y);
+      }
+    }
+  }, [rodConfig, furnaceDimensions]);
+
+  const drawTemperatureField = useCallback((
+    ctx: CanvasRenderingContext2D,
+    centerX: number,
+    centerY: number,
+    innerLength: number,
+    innerWidth: number
+  ) => {
+    if (innerLength <= 0 || innerWidth <= 0) return;
+    
+    const gridSize = 20;
+    const cols = Math.floor(innerLength / gridSize);
+    const rows = Math.floor(innerWidth / gridSize);
+    
+    for (let i = 0; i < cols; i++) {
+      for (let j = 0; j < rows; j++) {
+        const x = centerX - innerLength / 2 + i * gridSize + gridSize / 2;
+        const y = centerY - innerWidth / 2 + j * gridSize + gridSize / 2;
+        
+        const distToCenter = Math.sqrt(
+          Math.pow((x - centerX) / innerLength, 2) + 
+          Math.pow((y - centerY) / innerWidth, 2)
+        );
+        
+        const tempVariation = (0.5 - distToCenter) * 50;
+        const localTemp = currentTemp + tempVariation;
+        const tempRatio = temperature > 0 ? localTemp / temperature : 0;
+        
+        const alpha = 0.1 + Math.random() * 0.05;
+        const red = Math.floor(255 * Math.min(Math.max(tempRatio * 1.2, 0), 1));
+        const green = Math.floor(100 * Math.max(1 - tempRatio * 0.8, 0));
+        
+        if (isFinite(red) && isFinite(green)) {
+          ctx.fillStyle = `rgba(${red}, ${green}, 30, ${alpha})`;
+          ctx.fillRect(x - gridSize / 2, y - gridSize / 2, gridSize, gridSize);
+        }
+      }
+    }
+  }, [currentTemp, temperature]);
+
+  const drawFurnace = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    const totalInsulationThickness = insulationLayers.reduce((sum, layer) => sum + (layer.thickness || 0), 0);
+    const totalLength = (furnaceDimensions.length || 0) + totalInsulationThickness * 2;
+    const totalWidth = (furnaceDimensions.width || 0) + totalInsulationThickness * 2;
+    
+    if (totalLength <= 0 || totalWidth <= 0) return;
+    
+    const scale = Math.min(
+      (canvas.width - 100) / totalLength,
+      (canvas.height - 100) / totalWidth
+    );
+
+    if (!isFinite(scale) || scale <= 0) return;
+
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+
+    let currentOffset = 0;
+    const colors = ['#8B4513', '#A0522D', '#CD853F', '#DEB887'];
+
+    for (let i = insulationLayers.length - 1; i >= 0; i--) {
+      const layer = insulationLayers[i];
+      currentOffset += layer.thickness;
+      
+      const layerLength = furnaceDimensions.length + currentOffset * 2;
+      const layerWidth = furnaceDimensions.width + currentOffset * 2;
+      
+      ctx.strokeStyle = colors[i % colors.length];
+      ctx.lineWidth = 3;
+      ctx.strokeRect(
+        centerX - (layerLength * scale) / 2,
+        centerY - (layerWidth * scale) / 2,
+        layerLength * scale,
+        layerWidth * scale
+      );
+      
+      ctx.fillStyle = colors[i % colors.length] + '20';
+      ctx.fillRect(
+        centerX - (layerLength * scale) / 2,
+        centerY - (layerWidth * scale) / 2,
+        layerLength * scale,
+        layerWidth * scale
+      );
+      
+      ctx.fillStyle = '#333';
+      ctx.font = '11px monospace';
+      ctx.fillText(
+        `Layer ${4 - i}: ${layer.thickness}mm`,
+        centerX - (layerLength * scale) / 2 + 5,
+        centerY - (layerWidth * scale) / 2 + 15
+      );
+    }
+
+    const innerLength = furnaceDimensions.length * scale;
+    const innerWidth = furnaceDimensions.width * scale;
+    
+    const tempRatio = currentTemp / temperature;
+    const red = Math.floor(255 * Math.min(tempRatio * 1.5, 1));
+    const green = Math.floor(100 * (1 - tempRatio));
+    const blue = Math.floor(50 * (1 - tempRatio));
+    
+    const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, Math.max(innerLength, innerWidth) / 2);
+    gradient.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 0.8)`);
+    gradient.addColorStop(0.7, `rgba(${red * 0.8}, ${green}, ${blue}, 0.6)`);
+    gradient.addColorStop(1, `rgba(${red * 0.6}, ${green}, ${blue}, 0.4)`);
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(
+      centerX - innerLength / 2,
+      centerY - innerWidth / 2,
+      innerLength,
+      innerWidth
+    );
+
+    drawHeatingRods(ctx, centerX, centerY, innerLength, innerWidth);
+
+    drawTemperatureField(ctx, centerX, centerY, innerLength, innerWidth);
+  }, [insulationLayers, furnaceDimensions, currentTemp, temperature, drawHeatingRods, drawTemperatureField]);
+
+  useEffect(() => {
+    drawFurnace();
+  }, [drawFurnace]);
+
+  useEffect(() => {
+    if (isSimulating) {
+      const interval = setInterval(() => {
+        setCurrentTemp(prev => {
+          const newTemp = prev + heatingRate * simulationSpeed * 0.1;
+          if (newTemp >= temperature) {
+            setIsSimulating(false);
+            return temperature;
+          }
+          return newTemp;
+        });
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [isSimulating, heatingRate, temperature, simulationSpeed]);
+
+  const updateLayerValue = (index: number, field: keyof InsulationLayer, value: number) => {
+    const newLayers = [...insulationLayers];
+    newLayers[index][field] = value;
+    if (field === 'thickness' || field === 'thermalConductivity') {
+      if (field === 'thickness' && newLayers[index].thermalConductivity !== 0) {
+        newLayers[index].thermalResistance = value / newLayers[index].thermalConductivity;
+      } else if (field === 'thermalConductivity' && value !== 0) {
+        newLayers[index].thermalResistance = newLayers[index].thickness / value;
+      }
+    }
+    setInsulationLayers(newLayers);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-center gap-8 py-32 px-16 bg-white dark:bg-black">
-        <svg
-          viewBox="0 0 69 26"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="fill-black dark:fill-white"
-        >
-          <path d="M13.7917 24.3604C12.4622 25.3549 10.7895 25.8884 8.82032 25.8884C6.66971 25.8884 4.87412 25.3543 3.47587 24.3604H13.7917Z"></path>
-          <path d="M27.8204 24.3604C26.802 25.2894 25.534 25.8884 24.1756 25.8884C22.4188 25.8884 21.02 25.339 20.108 24.3604H27.8204Z"></path>
-          <path d="M44.5726 24.3604C43.0194 25.3511 41.0762 25.8884 38.8367 25.8884C36.5972 25.8884 34.6541 25.3511 33.1008 24.3604H44.5726Z"></path>
-          <path d="M6.10452 21.7838C6.64469 22.5408 7.32257 23.0964 8.12748 23.4234H2.40008C1.94592 22.9414 1.55318 22.3936 1.22435 21.7838H6.10452Z"></path>
-          <path d="M15.9753 21.7838C15.6457 22.3936 15.2602 22.9415 14.8213 23.4234H11.8608C12.7015 23.0973 13.4264 22.543 14.0227 21.7838H15.9753Z"></path>
-          <path d="M23.2016 21.7838C23.3205 22.5267 23.6272 23.0906 24.0875 23.4234H19.4507C19.2008 22.9377 19.0348 22.3887 18.9611 21.7838H23.2016Z"></path>
-          <path d="M29.6415 21.7838C29.3929 22.3649 29.0672 22.9198 28.6798 23.4234H26.2913C26.809 23.0921 27.2884 22.5303 27.6965 21.7838H29.6415Z"></path>
-          <path d="M34.7756 21.7838C35.1876 22.498 35.7076 23.0447 36.3327 23.4234H31.8901C31.3725 22.9406 30.9182 22.3925 30.5327 21.7838H34.7756Z"></path>
-          <path d="M47.1403 21.7838C46.7548 22.3925 46.3005 22.9406 45.7829 23.4234H41.3477C41.9765 23.0447 42.5011 22.4979 42.9178 21.7838H47.1403Z"></path>
-          <path d="M4.97293 19.2072C5.1237 19.8073 5.31836 20.3552 5.55486 20.8468H0.788749C0.585257 20.3346 0.420002 19.7875 0.293988 19.2072H4.97293Z"></path>
-          <path d="M16.9458 19.2072C16.8042 19.7876 16.6278 20.3347 16.4179 20.8468H14.6376C14.9063 20.3562 15.1356 19.8083 15.3244 19.2072H16.9458Z"></path>
-          <path d="M23.146 20.8468H18.9172V19.2072H23.146V20.8468Z"></path>
-          <path d="M33.879 19.2072C33.9937 19.8097 34.1454 20.3562 34.3337 20.8468H30.0171C30.0067 20.8251 29.9961 20.8035 29.9859 20.7817C29.9802 20.8034 29.9741 20.8251 29.9682 20.8468H28.1326C28.3289 20.3505 28.4984 19.8012 28.6354 19.2072H33.879Z"></path>
-          <path d="M48.2582 19.2072C48.1017 19.7867 47.8998 20.3339 47.6561 20.8468H43.3651C43.5558 20.3562 43.71 19.8097 43.8264 19.2072H48.2582Z"></path>
-          <path d="M4.61127 16.6306C4.63883 17.207 4.69545 17.7543 4.78 18.2703H0.128844C0.056725 17.7466 0.0134713 17.1997 0 16.6306H4.61127Z"></path>
-          <path d="M17.2781 17.2464C17.2423 17.5969 17.1958 17.9383 17.1392 18.2703H15.5758C15.6704 17.8506 15.7479 17.4096 15.8073 16.9484L17.2781 17.2464Z"></path>
-          <path d="M23.146 18.2703H18.9172V16.6306H23.146V18.2703Z"></path>
-          <path d="M33.6225 16.6306C33.6374 17.2111 33.6755 17.7576 33.7361 18.2703H28.8183C28.902 17.7493 28.9618 17.2012 28.9946 16.6306H33.6225Z"></path>
-          <path d="M48.643 16.6306C48.6191 17.199 48.5595 17.7459 48.4664 18.2703H43.9719C44.0335 17.7576 44.072 17.211 44.0873 16.6306H48.643Z"></path>
-          <path d="M23.146 6.89115H28.9193V8.56739H23.146V15.6937H18.9172V8.56739H15.8592L16.4324 14.49L14.9983 14.6762C14.0055 9.75933 13.1963 8.00865 9.8132 7.85966C6.45181 7.85968 4.61542 10.5441 4.592 15.6937H0.00268892C0.175472 9.48821 3.32011 6.14613 8.93079 6.14613C9.77653 6.14614 10.7326 6.25781 11.8725 6.51853C13.152 6.78855 14.2702 6.89115 15.697 6.89115C19.7286 6.89112 21.3074 4.20914 22.0796 0H23.146V6.89115Z"></path>
-          <path d="M38.8367 6.14613C44.6383 6.14616 48.4971 9.86614 48.6497 15.6937H44.092C44.0101 10.6034 42.1785 7.97132 38.8367 7.97128C35.5308 7.97128 33.6998 10.6034 33.618 15.6937H29.0235C29.1761 9.86611 33.0351 6.14613 38.8367 6.14613Z"></path>
-          <path
-            fillRule="evenodd"
-            clipRule="evenodd"
-            d="M58.5142 19.14C59.5559 19.14 60.9024 19.5091 60.9532 22.5701H58.3236C57.7138 22.5701 57.3201 22.734 57.3709 23.3763C57.5233 25.2074 57.9934 25.385 58.6413 25.385C59.3145 25.385 59.937 25.18 60.2545 23.9229C60.28 23.8546 60.4706 23.8545 60.5468 23.8545C60.6103 23.8545 60.8389 23.8546 60.8135 23.9229C60.4197 25.6993 59.6702 26 58.6413 26C57.5996 26 55.9862 25.631 55.9862 22.5701C55.9862 19.4954 57.536 19.14 58.5142 19.14ZM58.5142 19.5773C57.9044 19.5773 57.4217 19.9736 57.3455 22.0917H59.5813C59.5051 19.9737 59.1367 19.5773 58.5142 19.5773Z"
-          ></path>
-          <path d="M63.258 19.2631C63.3215 19.2631 63.3342 19.4543 63.3342 19.509C63.3342 19.55 63.3216 19.7276 63.258 19.7276C62.6737 19.7276 62.7118 20.083 62.8262 20.5066C62.9913 21.1899 63.5121 22.9663 63.6137 23.4309C63.6391 23.5676 63.7662 23.5539 63.817 23.4309L65.0238 20.1786C65.0365 20.124 65.1763 20.124 65.2525 20.124C65.3287 20.124 65.4685 20.124 65.4939 20.1786L66.6625 23.4309C66.7006 23.5539 66.8404 23.5539 66.8658 23.4309L67.6661 20.5203C67.7931 20.083 67.8186 19.7276 67.2342 19.7276C67.1834 19.7276 67.1707 19.5773 67.1707 19.509C67.1707 19.427 67.1834 19.2631 67.2342 19.2631H68.9238C68.9746 19.2631 69 19.427 69 19.509C69 19.5773 68.9746 19.7276 68.9238 19.7276C68.3903 19.7276 68.2378 20.1239 68.1235 20.5339C67.9965 20.9438 66.5613 25.8484 66.5482 25.9043C66.5228 25.959 66.4339 25.959 66.3704 25.959C66.3069 25.959 66.2179 25.9317 66.2052 25.9043C66.1036 25.426 65.0619 22.6247 64.9222 22.1054C64.9095 21.9824 64.7443 21.9824 64.7062 22.1191C64.6554 22.2286 63.3347 25.8485 63.3216 25.9043C63.3089 25.959 63.2326 25.959 63.1564 25.959C63.0802 25.959 63.004 25.959 62.9786 25.9043L61.4033 20.5339C61.2763 20.0693 61.1111 19.7276 60.5649 19.7276C60.5268 19.7276 60.5014 19.591 60.5014 19.509C60.5014 19.4133 60.5268 19.2631 60.5649 19.2631H63.258Z"></path>
-          <path d="M53.2441 19.1264C54.0064 19.1264 55.2766 19.3724 55.2766 21.2718V24.5105C55.2766 24.9204 55.3275 25.3167 55.8991 25.3167C55.9499 25.3167 55.9627 25.4807 55.9627 25.549C55.9627 25.631 55.9499 25.795 55.8991 25.795H53.2823C53.2441 25.795 53.2187 25.6584 53.2187 25.5627C53.2187 25.4671 53.2314 25.3167 53.2823 25.3167C53.8666 25.3167 53.892 24.9204 53.892 24.5105V21.5178C53.892 19.9053 53.4347 19.8507 53.0536 19.8507C52.4184 19.8507 52.2024 20.3699 52.0119 20.7525V24.5105C52.0119 24.9341 52.0627 25.3167 52.6598 25.3167C52.7106 25.3167 52.7233 25.508 52.7233 25.549C52.7233 25.6037 52.6979 25.795 52.6598 25.795H49.8777C49.8269 25.795 49.8015 25.6583 49.8015 25.549C49.8015 25.4671 49.8269 25.3168 49.8777 25.3167C50.6526 25.3167 50.7034 24.9068 50.7034 24.5105V20.5476C50.7034 20.0693 50.5764 19.7413 49.8777 19.7413C49.8269 19.7413 49.8015 19.6047 49.8015 19.4954C49.8015 19.3861 49.8269 19.2631 49.8777 19.2631H51.6308C51.8213 19.2631 51.9611 19.3314 51.9992 19.673C52.0119 19.7687 52.0754 19.796 52.1389 19.7276C52.3422 19.4817 52.6598 19.1264 53.2441 19.1264Z"></path>
-          <path d="M48.0394 25.9621H46.8V24.629H48.0394V25.9621Z"></path>
-        </svg>
-        <div className="flex flex-col items-center text-center">
-          <h1 className="max-w-xs text-2xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            Ready for your first task
-          </h1>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-6">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-4xl font-bold mb-8 text-center bg-gradient-to-r from-orange-400 to-red-600 bg-clip-text text-transparent">
+          炉膛温度场分布与均匀性交互系统
+        </h1>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-gray-800 rounded-lg p-6 shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-semibold">炉膛俯视图</h2>
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <div className="text-sm text-gray-400">当前温度</div>
+                  <div className="text-2xl font-bold text-orange-400">
+                    {currentTemp.toFixed(1)}°C
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-400">目标温度</div>
+                  <div className="text-2xl font-bold text-red-400">
+                    {temperature}°C
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <canvas
+              ref={canvasRef}
+              width={800}
+              height={600}
+              className="w-full bg-gray-900 rounded border-2 border-gray-700"
+            />
+            
+            <div className="mt-4 flex gap-4">
+              <button
+                onClick={() => {
+                  setIsSimulating(!isSimulating);
+                }}
+                className={`flex-1 py-3 rounded-lg font-semibold transition-all ${
+                  isSimulating
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                {isSimulating ? '暂停模拟' : '开始模拟'}
+              </button>
+              <button
+                onClick={() => {
+                  setCurrentTemp(25);
+                  setIsSimulating(false);
+                }}
+                className="px-6 py-3 bg-gray-600 hover:bg-gray-700 rounded-lg font-semibold transition-all"
+              >
+                重置
+              </button>
+            </div>
+          </div>
+          
+          <div className="space-y-6">
+            <div className="bg-gray-800 rounded-lg p-6 shadow-xl">
+              <h3 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">
+                温度设置
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    目标温度: {temperature}°C
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1720"
+                    value={temperature}
+                    onChange={(e) => setTemperature(Number(e.target.value))}
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                  />
+                  <input
+                    type="number"
+                    value={temperature}
+                    onChange={(e) => setTemperature(Math.min(1720, Math.max(0, Number(e.target.value))))}
+                    className="w-full mt-2 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    升温速率: {heatingRate}°C/s
+                  </label>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="20"
+                    step="0.1"
+                    value={heatingRate}
+                    onChange={(e) => setHeatingRate(Number(e.target.value))}
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    模拟速度: {simulationSpeed}x
+                  </label>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="10"
+                    step="0.1"
+                    value={simulationSpeed}
+                    onChange={(e) => setSimulationSpeed(Number(e.target.value))}
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-800 rounded-lg p-6 shadow-xl">
+              <h3 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">
+                炉膛尺寸 (mm)
+              </h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">长度</label>
+                  <input
+                    type="number"
+                    value={furnaceDimensions.length}
+                    onChange={(e) => setFurnaceDimensions({...furnaceDimensions, length: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">宽度</label>
+                  <input
+                    type="number"
+                    value={furnaceDimensions.width}
+                    onChange={(e) => setFurnaceDimensions({...furnaceDimensions, width: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">高度</label>
+                  <input
+                    type="number"
+                    value={furnaceDimensions.height}
+                    onChange={(e) => setFurnaceDimensions({...furnaceDimensions, height: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      </main>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          <div className="bg-gray-800 rounded-lg p-6 shadow-xl">
+            <h3 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">
+              保温层配置
+            </h3>
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {insulationLayers.map((layer, index) => (
+                <div key={index} className="bg-gray-700 rounded p-4 border-l-4 border-orange-500">
+                  <h4 className="font-semibold mb-3">第 {index + 1} 层</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs mb-1">厚度 (mm)</label>
+                      <input
+                        type="number"
+                        value={layer.thickness}
+                        onChange={(e) => updateLayerValue(index, 'thickness', Number(e.target.value))}
+                        className="w-full px-2 py-1 text-sm bg-gray-600 rounded border border-gray-500 focus:border-orange-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs mb-1">导热系数</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={layer.thermalConductivity}
+                        onChange={(e) => updateLayerValue(index, 'thermalConductivity', Number(e.target.value))}
+                        className="w-full px-2 py-1 text-sm bg-gray-600 rounded border border-gray-500 focus:border-orange-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs mb-1">热阻</label>
+                      <input
+                        type="number"
+                        value={layer.thermalResistance.toFixed(2)}
+                        onChange={(e) => updateLayerValue(index, 'thermalResistance', Number(e.target.value))}
+                        className="w-full px-2 py-1 text-sm bg-gray-600 rounded border border-gray-500 focus:border-orange-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-gray-800 rounded-lg p-6 shadow-xl">
+            <h3 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">
+              硅钼棒配置
+            </h3>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm mb-1">总数量</label>
+                  <input
+                    type="number"
+                    value={rodConfig.totalCount}
+                    onChange={(e) => setRodConfig({...rodConfig, totalCount: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">热端长度 (mm)</label>
+                  <input
+                    type="number"
+                    value={rodConfig.hotEndLength}
+                    onChange={(e) => setRodConfig({...rodConfig, hotEndLength: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">冷端长度 (mm)</label>
+                  <input
+                    type="number"
+                    value={rodConfig.coldEndLength}
+                    onChange={(e) => setRodConfig({...rodConfig, coldEndLength: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">上壁数量</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={rodConfig.topWallCount}
+                    onChange={(e) => setRodConfig({...rodConfig, topWallCount: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">下壁数量</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={rodConfig.bottomWallCount}
+                    onChange={(e) => setRodConfig({...rodConfig, bottomWallCount: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">左壁数量</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={rodConfig.leftWallCount}
+                    onChange={(e) => setRodConfig({...rodConfig, leftWallCount: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">右壁数量</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={rodConfig.rightWallCount}
+                    onChange={(e) => setRodConfig({...rodConfig, rightWallCount: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">离内壁距离 (mm)</label>
+                  <input
+                    type="number"
+                    value={rodConfig.wallDistance}
+                    onChange={(e) => setRodConfig({...rodConfig, wallDistance: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 bg-gray-800 rounded-lg p-6 shadow-xl">
+          <h3 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">
+            系统说明
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300">
+            <div>
+              <h4 className="font-semibold text-orange-400 mb-2">可视化说明</h4>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>不同颜色的矩形表示不同的保温层</li>
+                <li>硅钼棒从顶壁垂直穿入，沿四周墙壁布置</li>
+                <li>俯视图：每根棒显示为2个圆点+连线</li>
+                <li>金色圆点（冷端）+ 橙红色连线 + 红色圆点（热端）</li>
+                <li>温度场通过颜色渐变显示，红色表示高温</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold text-orange-400 mb-2">物理模型</h4>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>基于纳维-斯托克斯方程的温度场分布</li>
+                <li>考虑热传导、对流和辐射效应</li>
+                <li>保温层热阻计算：R = 厚度 / 导热系数</li>
+                <li>温度均匀性受硅钼棒布局影响</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold text-orange-400 mb-2">操作提示</h4>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>调整目标温度和升温速率后点击&ldquo;开始模拟&rdquo;</li>
+                <li>使用模拟速度滑块加快或减慢动画</li>
+                <li>修改炉膛参数实时查看温度场变化</li>
+                <li>优化硅钼棒布局以提高温度均匀性</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold text-orange-400 mb-2">技术特性</h4>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>温度范围：0-1720°C</li>
+                <li>4层可配置保温结构</li>
+                <li>灵活的硅钼棒布局配置</li>
+                <li>实时温度场可视化</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
