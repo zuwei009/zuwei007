@@ -22,6 +22,7 @@ interface RodConfiguration {
   widthDirection: number;
   wallDistance: number;
   spacing: number;
+  orientation: 'parallel' | 'perpendicular';
 }
 
 export default function FurnaceSimulator() {
@@ -52,6 +53,7 @@ export default function FurnaceSimulator() {
     widthDirection: 3,
     wallDistance: 100,
     spacing: 300,
+    orientation: 'parallel',
   });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -64,37 +66,96 @@ export default function FurnaceSimulator() {
     innerWidth: number
   ) => {
     const wallDist = rodConfig.wallDistance * Math.min(innerLength / furnaceDimensions.length, innerWidth / furnaceDimensions.width);
+    const scale = Math.min(innerLength / furnaceDimensions.length, innerWidth / furnaceDimensions.width);
+    const hotEndScaled = rodConfig.hotEndLength * scale;
+    const coldEndScaled = rodConfig.coldEndLength * scale;
+    const rodLength = hotEndScaled + coldEndScaled;
     
     ctx.strokeStyle = '#FF4500';
     ctx.fillStyle = '#FF6347';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 3;
 
-    const lengthSpacing = rodConfig.lengthDirection > 1 
-      ? (innerLength - 2 * wallDist) / (rodConfig.lengthDirection - 1)
-      : 0;
-    const widthSpacing = rodConfig.widthDirection > 1
-      ? (innerWidth - 2 * wallDist) / (rodConfig.widthDirection - 1)
-      : 0;
-    
-    for (let i = 0; i < rodConfig.lengthDirection; i++) {
-      for (let j = 0; j < rodConfig.widthDirection; j++) {
+    if (rodConfig.orientation === 'parallel') {
+      const lengthSpacing = rodConfig.lengthDirection > 1 
+        ? (innerLength - 2 * wallDist) / (rodConfig.lengthDirection - 1)
+        : 0;
+      
+      for (let i = 0; i < rodConfig.lengthDirection; i++) {
         const x = centerX - innerLength / 2 + wallDist + i * lengthSpacing;
+        
+        for (let j = 0; j < rodConfig.widthDirection; j++) {
+          const startY = centerY - innerWidth / 2 + wallDist + j * (innerWidth - 2 * wallDist) / Math.max(1, rodConfig.widthDirection - 1);
+          const endY = startY;
+          
+          if (!isFinite(x) || !isFinite(startY)) continue;
+          
+          const rodStartX = x - rodLength / 2;
+          const rodEndX = x + rodLength / 2;
+          
+          ctx.beginPath();
+          ctx.moveTo(rodStartX, startY);
+          ctx.lineTo(rodEndX, endY);
+          ctx.stroke();
+          
+          ctx.fillStyle = '#FFD700';
+          ctx.beginPath();
+          ctx.arc(rodStartX, startY, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#FFA500';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          ctx.fillStyle = '#FF4500';
+          ctx.beginPath();
+          ctx.arc(rodEndX, endY, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#FF0000';
+          ctx.stroke();
+          
+          ctx.strokeStyle = '#FF4500';
+          ctx.lineWidth = 3;
+        }
+      }
+    } else {
+      const widthSpacing = rodConfig.widthDirection > 1
+        ? (innerWidth - 2 * wallDist) / (rodConfig.widthDirection - 1)
+        : 0;
+      
+      for (let j = 0; j < rodConfig.widthDirection; j++) {
         const y = centerY - innerWidth / 2 + wallDist + j * widthSpacing;
         
-        if (!isFinite(x) || !isFinite(y)) continue;
-        
-        ctx.beginPath();
-        ctx.arc(x, y, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        
-        const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, 20);
-        glowGradient.addColorStop(0, 'rgba(255, 69, 0, 0.8)');
-        glowGradient.addColorStop(1, 'rgba(255, 69, 0, 0)');
-        ctx.fillStyle = glowGradient;
-        ctx.beginPath();
-        ctx.arc(x, y, 20, 0, Math.PI * 2);
-        ctx.fill();
+        for (let i = 0; i < rodConfig.lengthDirection; i++) {
+          const startX = centerX - innerLength / 2 + wallDist + i * (innerLength - 2 * wallDist) / Math.max(1, rodConfig.lengthDirection - 1);
+          const endX = startX;
+          
+          if (!isFinite(startX) || !isFinite(y)) continue;
+          
+          const rodStartY = y - rodLength / 2;
+          const rodEndY = y + rodLength / 2;
+          
+          ctx.beginPath();
+          ctx.moveTo(startX, rodStartY);
+          ctx.lineTo(endX, rodEndY);
+          ctx.stroke();
+          
+          ctx.fillStyle = '#FFD700';
+          ctx.beginPath();
+          ctx.arc(startX, rodStartY, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#FFA500';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          ctx.fillStyle = '#FF4500';
+          ctx.beginPath();
+          ctx.arc(endX, rodEndY, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#FF0000';
+          ctx.stroke();
+          
+          ctx.strokeStyle = '#FF4500';
+          ctx.lineWidth = 3;
+        }
       }
     }
   }, [rodConfig, furnaceDimensions]);
@@ -525,6 +586,17 @@ export default function FurnaceSimulator() {
                     className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm mb-1">棒方向</label>
+                  <select
+                    value={rodConfig.orientation}
+                    onChange={(e) => setRodConfig({...rodConfig, orientation: e.target.value as 'parallel' | 'perpendicular'})}
+                    className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  >
+                    <option value="parallel">平行于炉壁</option>
+                    <option value="perpendicular">垂直于炉壁</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -539,7 +611,8 @@ export default function FurnaceSimulator() {
               <h4 className="font-semibold text-orange-400 mb-2">可视化说明</h4>
               <ul className="space-y-1 list-disc list-inside">
                 <li>不同颜色的矩形表示不同的保温层</li>
-                <li>红色圆点表示硅钼棒位置（垂直安装，俯视图显示横截面）</li>
+                <li>硅钼棒显示：两个圆点（金色冷端，红色热端）+ 中间连线</li>
+                <li>棒沿着炉壁布置，可平行或垂直于炉壁</li>
                 <li>温度场通过颜色渐变显示，红色表示高温</li>
                 <li>中心区域温度最高，边缘区域温度较低</li>
               </ul>
